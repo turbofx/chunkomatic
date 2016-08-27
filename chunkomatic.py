@@ -211,9 +211,10 @@ class chunkomatic(object):
         real_filename = self.get_realfilename(section)
         debug("real_filename: %s" % real_filename)
         try:
-            origin_fp = os.open(os.path.join(origin, real_filename), os.O_RDONLY)
+            #origin_fp = os.open(os.path.join(origin, real_filename), os.O_RDONLY)
+            origin_fp = os.open(real_filename, os.O_RDONLY)
         except:
-            debug("Unable to open origin file for reading: %s" % os.path.join(origin, os.path.split(real_filename)))
+            debug("Unable to open origin file for reading: %s" % os.path.join(origin, real_filename))
             return -1
         cwd = os.getcwd()
         os.chdir(location) # let's move into our assembly area
@@ -373,6 +374,15 @@ def main(argv):
             x.digest_dir(options.directory)
         x.write_mapfile(options.mapfile)
     elif options.process:
+        # This part of the code is kind of wrong.  It works in it's own quirky way, but you have to have the original file?
+        # One scenario is the person grabbed the giant file and the map and wants to verify that the file is good.
+        # We should take the map, see if the file exists and then walk down all the checksums to see if the file
+        # has all the right bits.
+
+        # Another scenario is the person at the other end generated N chunkN files and a map.
+        # They then want to take those chunk files and create either the original or some other named file from the chunks
+        # we should read the map file, locate the chunk files and do a crypto verification of them.
+        # Then once all the pieces are known to be cryptograpically good, we should then construct the file from the parts.
         debug("In Process mode.")
         x.load_mapfile(options.mapfile)
         if not x.verify_location(options.location):
@@ -382,6 +392,8 @@ def main(argv):
             x.fetch_file(options.file, options.origin, options.location)
         elif options.directory:
             x.fetch_dir(options.directory, options.location)
+        else:
+            print "Did not specify file or directory"
     
 if __name__ == '__main__':
     main(sys.argv[1:])
