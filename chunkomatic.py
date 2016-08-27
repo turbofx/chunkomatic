@@ -11,7 +11,7 @@ from optparse import OptionParser
 DEFAULT_CHUNK_SIZE = 536870912 # 500MB
 DEFAULT_BLOCK_SIZE = 32768 # default block read size
 DEFAULT_CHUNK_LABEL = 'c' # label for each chunk piece.
-DEFAULT_HASH_TYPE = 'md5' # yeah, yeah, I know.
+DEFAULT_HASH_TYPE = 'sha1' # Switched to sha1
 DEFAULT_TEMP_FILE = 'chunkomatic.tempfile'
 
 DEBUG = True
@@ -28,7 +28,7 @@ class chunkomatic(object):
         self.default_hash_type = DEFAULT_HASH_TYPE
 
     def setup_mapconfig(self):
-        ''' Create a ConfigParser object and add our default options '''
+        """ Create a ConfigParser object and add our default options """
         self.mapfile_config = ConfigParser.RawConfigParser()
         self.mapfile_config.add_section('Defaults')
         self.mapfile_config.set('Defaults', 'default_chunk_size', self.default_chunk_size)
@@ -51,7 +51,7 @@ class chunkomatic(object):
                 debug("%s is NOT a file... ignoring!" % f)
         os.chdir(cwd)
 
-    def digest_file(self, file2process):
+    def digest_file(self, file2process, create_chunks=False):
         ''' 
         Read in a file and create an entry in the mapfile containing the full path
         and chunk offset checksumming information
@@ -77,10 +77,24 @@ class chunkomatic(object):
         chunk_offset = 0 # where we are in the chunk
         chunk_hash = hashlib.new(self.default_hash_type) # Create the hash for the chunk
         total_hash = hashlib.new(self.default_hash_type) # Create the hash for the whole file
-        debug("Processing chunk: %d" % chunk_num) 
+        debug("Processing chunk: %d" % chunk_num)
+        file_open = False
         while(chunk_num < fchunks):
+            if not file_open:
+                if create_chunks:
+                    debug("Opening chunk file to write: %s" % chunk_label)
+                    try:
+                        cf = open(chunk_label, 'wb+')
+                    except OSError, e:
+                        debug("Unable to open file: %s" % cf)
+                        debug("Error: %s" % e)
+                        exit(-1)
+                    file_open = True
+                    
             hchunk = os.read(fp, self.default_block_size) # read a chunk from the file
             if len(hchunk) > 0: # we're not at end of file, yet
+                if create_chunks:
+                    cf.write(hchunk)
                 chunk_hash.update(hchunk) # update the hash
                 total_hash.update(hchunk) # update the file hash
                 cur_offset += len(hchunk) # increment our file offset
@@ -95,8 +109,12 @@ class chunkomatic(object):
                     chunk_label = '%s%d' % (self.default_chunk_label, chunk_num)
                     chunk_offset = 0
                     start_offset = cur_offset # Move the start offset up for the next chunk
+                    if create_chunks:
+                        cf.close()
+                        file_open = False
             else: # len(hchunk) is <= 0 thus EOF
                 os.close(fp)
+                debug("Last Chunk: [%d : %s]" % (cur_offset, chunk_hash.hexdigest()))
                 self.mapfile_config.set(section_name, chunk_label, "%d %d %s %s" % 
                                         (start_offset, cur_offset, chunk_hash.hexdigest(), total_hash.hexdigest())) # write chunk
                 self.mapfile_config.set(section_name, 'file_checksum', "%s" % total_hash.hexdigest()) # wrote total file checksum
@@ -291,20 +309,22 @@ class chunkomatic(object):
     def verify_location(self, location):
         ''' Verify the location that files will be deposited into is writeable, etc. '''
         cwd = os.getcwd()
+        print "location:", location
         try:
             os.chdir(location) # is it a directory we can enter?
-        except:
+        except OSerror, e:
             debug("Unable to enter directory: %s" % location)
+            debug("Error: %s", e)
             return False
         try:
-            fp = open(os.path.join(location, DEFAULT_TEMP_FILE), 'w')
+            fp = open(DEFAULT_TEMP_FILE, 'w')
             fp.write("This is a test")
             fp.close()
         except:
             debug("Unable to create a file in: %s" % location)
             return False
         try:
-            os.unlink(os.path.join(location, DEFAULT_TEMP_FILE))
+            os.unlink(DEFAULT_TEMP_FILE)
         except:
             debug("Unable to delete temp file: %s from location %s" % (DEFAULT_TEMP_FILE, location))
             return False
@@ -321,6 +341,7 @@ def process_cli():
     parser.add_option("-d", "--dir", dest="directory", help="Process a directory")
     parser.add_option("-l", "--location", dest="location", help="Location that processed files will be placed.")
     parser.add_option("-o", "--origin", dest="origin", help="Location to look for source files to download from.")
+    parser.add_option("-g", "--generate", dest="generate", action="store_true", help="During create, create map and chunk files.")
     (options, args) = parser.parse_args()
     # You must specify a mapfile.
     if not options.mapfile:
@@ -345,7 +366,7 @@ def main(argv):
         x.setup_mapconfig() # set our defaults
         if options.file: # process a single file
             debug("Processing a single file")
-            if x.digest_file(options.file) != 0:
+            if x.digest_file(options.file, options.generate) != 0:
                 debug("There was a problem processing file: %s" % options.file)
                 exit(-1) # no point even writing the mapfile... we failed to process our single file...
         if options.directory: # process a single dir
