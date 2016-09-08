@@ -20,6 +20,9 @@ def debug(msg):
     if DEBUG:
         print "XX DEBUG XX: ", msg
 
+def error_msg(msg):
+    print "Error: %s" % msg
+
 class chunkomatic(object):
     def __init__(self, default_chunk_size=DEFAULT_CHUNK_SIZE, default_block_size = DEFAULT_BLOCK_SIZE):
         self.default_chunk_size = default_chunk_size
@@ -147,7 +150,7 @@ class chunkomatic(object):
         if section == None:
             debug("File %s is not in map.")
             return False
-        print "Section: %s" % section
+        debug("Section: %s" % section)
         success = 0
         failure = 0
         temp_clist = {} # dictonary containing the key=position, value=tempfilename
@@ -266,6 +269,7 @@ class chunkomatic(object):
         else:
             os.chdir(cwd)
             return -1
+        
 
     def verify_chunk(self, file2check, chunk_checksum):
         try:
@@ -332,6 +336,7 @@ class chunkomatic(object):
         os.chdir(cwd)
         return True
 
+    
 def process_cli():
     parser = OptionParser()
     parser.add_option("-m", "--mapfile", dest="mapfile", help="Mapfile that will be used. Mandatory option")
@@ -342,19 +347,20 @@ def process_cli():
     parser.add_option("-d", "--dir", dest="directory", help="Process a directory")
     parser.add_option("-l", "--location", dest="location", help="Location that processed files will be placed.")
     parser.add_option("-o", "--origin", dest="origin", help="Location to look for source files to download from.")
-    parser.add_option("-g", "--generate", dest="generate", action="store_true", help="During create, create map and chunk files.")
+    parser.add_option("-g", "--generate", dest="generate", action="store_true", help="During create mode, create map and chunk files.\r\nDuring Process mode, take chunk files and map and create file")
+    parser.add_option("-v", "--verify", dest="verify", action="store_true", help="Verify the file/dir using the map.")
     (options, args) = parser.parse_args()
     # You must specify a mapfile.
     if not options.mapfile:
-        print "You MUST specify a mapfile!"
+        error_msg("You MUST specify a mapfile!")
         exit(-1)
     # You have to choose a mode... eithe create or process
     if (not options.create) and (not options.process):
-        print "You MUST specify a mode!"
+        error_msg("You MUST specify a mode!")
         exit(-1)
     # If you chose process you must also pick a location
     if options.process and (not options.location):
-        print "You MUST specify a location for files to be outputted to."
+        error_msg("You MUST specify a location for files to be outputted to.")
         exit(-1)
     return (options, args)
     
@@ -373,27 +379,37 @@ def main(argv):
         if options.directory: # process a single dir
             x.digest_dir(options.directory)
         x.write_mapfile(options.mapfile)
+    
     elif options.process:
-        # This part of the code is kind of wrong.  It works in it's own quirky way, but you have to have the original file?
-        # One scenario is the person grabbed the giant file and the map and wants to verify that the file is good.
-        # We should take the map, see if the file exists and then walk down all the checksums to see if the file
-        # has all the right bits.
+        debug("In Process Mode")
+        if options.generate:
+            x.load_mapfile(options.mapfile)
+            if options.file:
+                x.fetch_file(options.file, options.origin, options.location)
+            elif options.directory:
+                x.fetch_dir(options.directory, options.location)
+                
+    # elif options.process:
+    #     # This part of the code is kind of wrong.  It works in it's own quirky way, but you have to have the original file?
+    #     # One scenario is the person grabbed the giant file and the map and wants to verify that the file is good.
+    #     # We should take the map, see if the file exists and then walk down all the checksums to see if the file
+    #     # has all the right bits.
 
-        # Another scenario is the person at the other end generated N chunkN files and a map.
-        # They then want to take those chunk files and create either the original or some other named file from the chunks
-        # we should read the map file, locate the chunk files and do a crypto verification of them.
-        # Then once all the pieces are known to be cryptograpically good, we should then construct the file from the parts.
-        debug("In Process mode.")
-        x.load_mapfile(options.mapfile)
-        if not x.verify_location(options.location):
-            debug("Verify of target location failed...")
-            exit(-1)
-        if options.file:
-            x.fetch_file(options.file, options.origin, options.location)
-        elif options.directory:
-            x.fetch_dir(options.directory, options.location)
-        else:
-            print "Did not specify file or directory"
+    #     # Another scenario is the person at the other end generated N chunkN files and a map.
+    #     # They then want to take those chunk files and create either the original or some other named file from the chunks
+    #     # we should read the map file, locate the chunk files and do a crypto verification of them.
+    #     # Then once all the pieces are known to be cryptograpically good, we should then construct the file from the parts.
+    #     debug("In Process mode.")
+    #     x.load_mapfile(options.mapfile)
+    #     if not x.verify_location(options.location):
+    #         debug("Verify of target location failed...")
+    #         exit(-1)
+    #     if options.file:
+    #         x.fetch_file(options.file, options.origin, options.location)
+    #     elif options.directory:
+    #         x.fetch_dir(options.directory, options.location)
+    #     else:
+    #         print "Did not specify file or directory"
     
 if __name__ == '__main__':
     main(sys.argv[1:])
