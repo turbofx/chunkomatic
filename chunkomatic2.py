@@ -158,7 +158,8 @@ class chunkomatic(object):
                 print "File: %s" % x
             return False
 
-    def assemble(self, filetoassemble)
+    def assemble(self, filetoassemble):
+        pass
     
     
     def check_chunk(self, chunk_to_check):
@@ -237,7 +238,7 @@ def main():
     x = chunkomatic()
     if o.generatemap:
         x.setup_mapconfig()
-        x.generate_chunks(o.filetoprocess)
+        x.generate_chunks(o.filetoprocess, create_chunks=True)
         x.write_mapfile(o.mapfile)
     
     if o.examine:
@@ -245,6 +246,8 @@ def main():
         if not x.examine(o.filetoprocess):
             print "Validation Failed"
             exit (-1)
+        else:
+            print "All Chunks verified"
         
 
 
