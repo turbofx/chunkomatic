@@ -55,6 +55,7 @@ class chunkomatic(object):
         self.default_block_size = self.mapfile_config.getint('Defaults', 'default_block_size')
         self.default_chunk_label = self.mapfile_config.get('Defaults', 'default_chunk_label')
         self.default_hash_type = self.mapfile_config.get('Defaults', 'default_hash_type')
+        return True
 
     def generate_chunks(self, file2process, create_chunks=True):
         """
@@ -126,6 +127,62 @@ class chunkomatic(object):
         debug("Processing of file %s is complete!" % file2process)
         return 0
 
+
+    def examine(self, filetoexamine):
+        """
+        Look in the map file, get the list of chunks and check each one
+        """
+        flist = self.mapfile_config.items('file:' + filetoexamine)
+        glist = []
+        blist = []
+        for x in flist:
+            if x[0] == 'fchunks':
+                chunks_to_check = int(x[1])
+                print "Chucks to check", chunks_to_check
+            if x[0][0] == self.default_chunk_label:
+                print "Chunk to check: ", x[0]
+                if self.check_chunk(x) == False:
+                    print "Chunk: %s failed verification" % x[0]
+                    blist.append(x[0])
+                else:
+                    glist.append(x[0])
+        if chunks_to_check == len(glist):
+            return True
+        else:
+            print "The following chunk files are corrupt:"
+            for x in blist:
+                print "File: %s" % x
+            return False
+    
+    
+    def check_chunk(self, chunk_to_check):
+        """
+        chunk_to_check is a tuple of (name, start_loc, end_loc, sha1 of chuck, sha1 sum to this point)
+        """
+        print chunk_to_check
+        chunk_checksum = chunk_to_check[1].split()[2]
+        print chunk_checksum
+        try:
+            fp = open(chunk_to_check[0], 'rb')
+        except OSError:
+            error_msg("Unable to open chunk file: %s" % chunk_to_check[0])
+            exit(-1)
+        chunk_hash = hashlib.new(self.default_hash_type)
+        done = False
+        debug("Checking chunk: %s" % chunk_to_check[0])
+        while not done:
+            chunk = fp.read(self.default_chunk_size)
+            chunk_hash.update(chunk)
+            if len(chunk) < self.default_chunk_size: # we've hit end of file
+                done = True
+        fp.close()
+        print "Final hash:", chunk_hash.hexdigest()
+        if chunk_hash.hexdigest() != chunk_checksum:
+            return False
+        else:
+            return True
+        
+    
     def write_mapfile(self, mapfile):
         with open(mapfile, 'wb') as mp:
             self.mapfile_config.write(mp)
@@ -178,6 +235,12 @@ def main():
         x.setup_mapconfig()
         x.generate_chunks(o.filetoprocess)
         x.write_mapfile(o.mapfile)
+    
+    if o.examine:
+        x.load_mapfile(o.mapfile)
+        if not x.examine(o.filetoprocess):
+            print "Validation Failed"
+            exit (-1)
         
 
 
