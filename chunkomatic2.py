@@ -57,10 +57,10 @@ class chunkomatic(object):
         self.default_hash_type = self.mapfile_config.get('Defaults', 'default_hash_type')
         return True
 
-    def generate_chunks(self, file2process, create_chunks=True):
+    def generate_chunks(self, file2process, create_chunks=True, abspath=False):
         """
         This function takes a file and generates N number of chunks
-        The default file name for each chunk is DEFAULT_CHUNK_LABEL_#_SHA1SUN
+        The default file name for each chunk is DEFAULT_CHUNK_LABEL_#
         """
         try:
             fp = os.open(os.path.abspath(file2process), os.O_RDONLY)
@@ -68,7 +68,11 @@ class chunkomatic(object):
             # log error here
             debug("Unable to open file: %s for reading!" % file2process)
             return -1
-        section_name = 'file:%s' % os.path.abspath(file2process)
+        if abspath:
+            section_name = 'file:%s' % os.path.abspath(file2process)
+        else:
+            section_name = 'file:%s' % file2process
+        
         self.mapfile_config.add_section(section_name)
         fsize = os.stat(os.path.abspath(file2process)).st_size
         self.mapfile_config.set(section_name, 'fsize', fsize)
@@ -153,20 +157,20 @@ class chunkomatic(object):
             for x in blist:
                 print "File: %s" % x
             return False
+
+    def assemble(self, filetoassemble)
     
     
     def check_chunk(self, chunk_to_check):
         """
         chunk_to_check is a tuple of (name, start_loc, end_loc, sha1 of chuck, sha1 sum to this point)
         """
-        print chunk_to_check
         chunk_checksum = chunk_to_check[1].split()[2]
-        print chunk_checksum
         try:
             fp = open(chunk_to_check[0], 'rb')
         except OSError:
             error_msg("Unable to open chunk file: %s" % chunk_to_check[0])
-            exit(-1)
+            return False
         chunk_hash = hashlib.new(self.default_hash_type)
         done = False
         debug("Checking chunk: %s" % chunk_to_check[0])
@@ -176,7 +180,7 @@ class chunkomatic(object):
             if len(chunk) < self.default_chunk_size: # we've hit end of file
                 done = True
         fp.close()
-        print "Final hash:", chunk_hash.hexdigest()
+        debug("Final hash: %s" % chunk_hash.hexdigest())
         if chunk_hash.hexdigest() != chunk_checksum:
             return False
         else:
