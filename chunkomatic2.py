@@ -158,6 +158,7 @@ class chunkomatic(object):
                 print "File: %s" % x
             return False
 
+
     def reassemble(self, filetoassemble):
         flist = self.mapfile_config.items('file:' + filetoassemble)
         fsize = 0
@@ -196,13 +197,15 @@ class chunkomatic(object):
         except OSError:
             error_msg("Unable to open destination file: %s" % filetoassemble)
             return False
+        
         file_inc_checksum = hashlib.new(self.default_hash_type)
+        
         for chunk in chunk_list:
-            print "chunk:", chunk
             fi = open(chunk[0], 'rb')
             chunk_checksum = hashlib.new(self.default_hash_type)
             debug("Processing chunk: %s" % chunk[0])
             done = False
+            
             while not done:
                 c = fi.read(self.default_block_size)
                 file_inc_checksum.update(c)
@@ -211,15 +214,18 @@ class chunkomatic(object):
                 if len(c) < self.default_block_size:
                     done = True
                     fi.close()
+                    
                     if chunk_checksum.hexdigest() != chunk[1].split()[2]:
                         error_msg("ABORTING! Checksum failed for chunk: %s" % chunk[0])
                         fo.close()
                         return False
+                    
                     if file_inc_checksum.hexdigest() != chunk[1].split()[3]:
                         error_msg("ABORTING! Rolling Checksum failed for accumlated file! Failed at block: %s" % chunk[0])
                         fo.close()
                         return False
         fo.close()
+        
         if file_checksum != file_inc_checksum.hexdigest():
             error_msg("Error! Final checksum fail!")
             return False
