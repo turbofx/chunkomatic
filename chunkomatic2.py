@@ -158,9 +158,75 @@ class chunkomatic(object):
                 print "File: %s" % x
             return False
 
-    def assemble(self, filetoassemble):
-        pass
-    
+    def reassemble(self, filetoassemble):
+        flist = self.mapfile_config.items('file:' + filetoassemble)
+        fsize = 0
+        file_checksum = ''
+        chunk_list = []
+        for x in flist:
+
+            if x[0][0] == self.default_chunk_label:
+                debug("Found chunk: %s" % x[0])
+                print x
+                chunk_list.append(x)
+                if not os.path.isfile(x[0]):
+                    error_msg("Unable to locate chunk file: %s" % x[0])
+                    return False
+                try:
+                    t = open(x[0], 'rb')
+                except:
+                    error_msg("Unable to open chunk file for reading!" % x[0])
+                    return False
+                try:
+                    k = t.read(self.default_block_size)
+                    t.close()
+                except:
+                    error_msg("Unable to read from chunk file: %s" % x[0])
+                    t.close()
+
+            if x[0] == 'fsize':
+                fsize = int(x[1])
+
+            if x[0] == 'file_checksum':
+                file_checksum = x[1]
+
+        debug("Inspection of config section for file: %s complete" % filetoassemble)
+        try:
+            fo = open(filetoassemble, 'w+b')
+        except OSError:
+            error_msg("Unable to open destination file: %s" % filetoassemble)
+            return False
+        file_inc_checksum = hashlib.new(self.default_hash_type)
+        for chunk in chunk_list:
+            print "chunk:", chunk
+            fi = open(chunk[0], 'rb')
+            chunk_checksum = hashlib.new(self.default_hash_type)
+            debug("Processing chunk: %s" % chunk[0])
+            done = False
+            while not done:
+                c = fi.read(self.default_block_size)
+                file_inc_checksum.update(c)
+                chunk_checksum.update(c)
+                fo.write(c)
+                if len(c) < self.default_block_size:
+                    done = True
+                    fi.close()
+                    if chunk_checksum.hexdigest() != chunk[1].split()[2]:
+                        error_msg("ABORTING! Checksum failed for chunk: %s" % chunk[0])
+                        fo.close()
+                        return False
+                    if file_inc_checksum.hexdigest() != chunk[1].split()[3]:
+                        error_msg("ABORTING! Rolling Checksum failed for accumlated file! Failed at block: %s" % chunk[0])
+                        fo.close()
+                        return False
+        fo.close()
+        if file_checksum != file_inc_checksum.hexdigest():
+            error_msg("Error! Final checksum fail!")
+            return False
+        else:
+            return True
+                    
+            
     
     def check_chunk(self, chunk_to_check):
         """
@@ -240,6 +306,7 @@ def main():
         x.setup_mapconfig()
         x.generate_chunks(o.filetoprocess, create_chunks=True)
         x.write_mapfile(o.mapfile)
+        exit(0)
     
     if o.examine:
         x.load_mapfile(o.mapfile)
@@ -248,6 +315,16 @@ def main():
             exit (-1)
         else:
             print "All Chunks verified"
+            exit (0)
+
+    if o.reassemble:
+        x.load_mapfile(o.mapfile)
+        if not x.reassemble(o.filetoprocess):
+            print "Reassmbly failed!"
+            exit (-1)
+        else:
+            print "Reassembly complete!"
+            exit (0)
         
 
 
